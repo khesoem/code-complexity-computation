@@ -2,12 +2,33 @@ import ast
 import textwrap
 from pathlib import Path
 
-class PlanTree:
-    def __init__(self, node: ast.AST, depth: int, line: int, child_plans: list['PlanNode']):
+class CCTree:
+    """
+    A class representing a control flow tree node. The tree contains only certain types of AST nodes.
+    Plan_depth is the plan depth of the node, according to the CCCP paper.
+    Note that the plan depth for a node inside a for loop is larger than the for loop itself.
+    Branch_depth is the depth of the node in the control flow tree, i.e. how many branches are there.
+    mpi stands for max plan activity, per CCCP paper definition.
+    """
+    def __init__(self, node: ast.AST, plan_depth: int, line: int, branch_depth: int, mpi: int, subtrees: list):
         self.node = node
-        self.depth = depth
+        self.plan_depth = plan_depth
         self.line = line
-        self.child_plans = child_plans
+        self.branch_depth = branch_depth
+        self.mpi = mpi
+        self.subtrees = subtrees
+
+    def get_depth_plan(self):
+        if not self.subtrees:
+            return self.plan_depth
+
+        return max(child.get_depth_plan() for child in self.subtrees)
+
+    def get_mpi(self):
+        if not self.subtrees:
+            return self.mpi
+
+        return max(self.mpi, max(child.get_mpi() for child in self.subtrees))
 
 def expression_depth(node: ast.expr) -> (int, set): # returns depth and a list of top binary operators
     if isinstance(node, ast.Constant):
@@ -50,78 +71,138 @@ def expression_depth(node: ast.expr) -> (int, set): # returns depth and a list o
     else:
         return 0, set()
 
-def create_plan_tree(node: ast.AST, branch_depth: int) -> int:
+def get_expression_identifiers(node: ast.expr) -> set:
+    """
+    Returns a set of identifiers used in the expression.
+    """
+    if isinstance(node, ast.Constant):
+        return set()
+
+    elif isinstance(node, ast.BinOp):
+        return get_expression_identifiers(node.left).union(get_expression_identifiers(node.right))
+
+    elif isinstance(node, ast.Compare):
+        return get_expression_identifiers(node.left).union(get_expression_identifiers(node.comparators))
+
+    elif isinstance(node, ast.UnaryOp):
+        return get_expression_identifiers(node.operand)
+
+    elif isinstance(node, ast.Call):
+        identifiers = {node.func.id} if isinstance(node.func, ast.Name) else set()
+        for arg in node.args:
+            identifiers.update(get_expression_identifiers(arg))
+        return identifiers
+
+    elif isinstance(node, ast.Name):
+        return {node.id}
+
+    elif isinstance(node, list):
+        return set()
+
+    elif isinstance(node, ast.List) or isinstance(node, ast.Tuple):
+        identifiers = set()
+        for elt in node.elts:
+            identifiers.update(get_expression_identifiers(elt))
+        return identifiers
+
+    elif isinstance(node, ast.Subscript):
+        return get_expression_identifiers(node.value).union(get_expression_identifiers(node.slice))
+
+    else:
+        return set()
+
+def create_cctree(node: ast.AST, parent_plan_depth: int, branch_depth: int) -> CCTree:
     if isinstance(node, ast.Module):
-        children_plans = [create_plan_tree(child, branch_depth) for child in ast.iter_child_nodes(node)]
-        return PlanTree(node, 0, 0, children_plans)
+        children_plans = [create_cctree(child, parent_plan_depth, branch_depth) for child in ast.iter_child_nodes(node)]
+        return CCTree(node, parent_plan_depth, 0, branch_depth, 0, children_plans)
 
     if isinstance(node, ast.Assign):
-        depth = expression_depth(node.value)[0] + 1 + branch_depth
-        return PlanTree(node, depth, node.lineno, [])
+        exp_depth = expression_depth(node.value)[0]
+        plan_depth = exp_depth + 1 + parent_plan_depth
+        identifiers = (get_expression_identifiers(node.value)
+                       .union({target.id for target in node.targets if isinstance(target, ast.Name)}))
+
+        """mpi is sum of branch depth, plan depth of the expression, and number of identifiers, 
+            minus one if there are identifiers in the expression to avoid double-counting the identifier"""
+        mpi = len(identifiers) + exp_depth + branch_depth + (1 if len(identifiers) == 0 else 0)
+        return CCTree(node, plan_depth, node.lineno, branch_depth, mpi, [])
 
     if isinstance(node, ast.AugAssign):
-        depth = expression_depth(node.value)[0] + 2 + branch_depth
-        return PlanTree(node, depth, node.lineno, [])
+        exp_depth = expression_depth(node.value)[0]
+        plan_depth = expression_depth(node.value)[0] + 2 + parent_plan_depth
+        identifiers = (get_expression_identifiers(node.value)
+                       .union({node.target.id if isinstance(node.target, ast.Name) else set()}))
+        mpi = len(identifiers) + exp_depth + branch_depth + 1 + (1 if len(identifiers) == 0 else 0)
+
+        return CCTree(node, plan_depth, node.lineno, branch_depth, mpi,[])
 
     if isinstance(node, ast.Expr) and isinstance(node.value, ast.Call):
         if not node.value.args:
-            return PlanTree(node, branch_depth + 1, node.lineno, [])
-        return PlanTree(node, max(expression_depth(arg)[0] for arg in node.value.args) + branch_depth + 1, node.lineno, [])
+            mpi = branch_depth + 1
+            return CCTree(node, parent_plan_depth + 1, node.lineno, branch_depth, mpi, [])
+
+        exp_depth = max(expression_depth(arg)[0] for arg in node.value.args)
+        plan_depth = exp_depth + 1 + parent_plan_depth
+        identifiers = (get_expression_identifiers(node.value)
+                       .union({node.value.func.id if isinstance(node.value.func, ast.Name) else set()}))
+        mpi = len(identifiers) + exp_depth + branch_depth + (1 if len(identifiers) == 0 else 0)
+
+        return CCTree(node, plan_depth, node.lineno, branch_depth, mpi, [])
 
     if isinstance(node, ast.For):
-        child_plans = []
+        subtrees = []
 
         iter_depth = expression_depth(node.iter)[0]
-        for_depth = branch_depth + iter_depth + 1
+        for_depth = parent_plan_depth + iter_depth + 1
 
         for child in node.body:
-            child_plans.append(create_plan_tree(child, for_depth))
+            subtrees.append(create_cctree(child, for_depth, branch_depth + 1))
 
-        return PlanTree(node, for_depth, node.lineno, child_plans)
+        identifiers = get_expression_identifiers(node.iter)
+        mpi = len(identifiers) + iter_depth + branch_depth + (1 if len(identifiers) == 0 else 0)
+        return CCTree(node, for_depth, node.lineno, branch_depth, mpi, subtrees)
 
     if isinstance(node, ast.While):
-        child_plans = []
+        subtrees = []
 
         test_depth = expression_depth(node.test)[0]
-        while_depth = branch_depth + test_depth + 1
+        while_depth = parent_plan_depth + test_depth + 1
 
         for child in node.body:
-            child_plans.append(create_plan_tree(child, while_depth))
+            subtrees.append(create_cctree(child, while_depth, branch_depth + 1))
 
-        return PlanTree(node, while_depth, node.lineno, child_plans)
+        identifiers = get_expression_identifiers(node.test)
+        mpi = len(identifiers) + test_depth + branch_depth + (1 if len(identifiers) == 0 else 0)
+
+        return CCTree(node, while_depth, node.lineno, branch_depth, mpi, subtrees)
 
     if isinstance(node, ast.If):
-        child_plans = []
+        subtrees = []
 
         test_depth = expression_depth(node.test)[0]
-        if_depth = branch_depth + test_depth + 1
+        if_depth = parent_plan_depth + test_depth + 1
 
         for child in node.body:
-            child_plans.append(create_plan_tree(child, if_depth))
+            subtrees.append(create_cctree(child, if_depth, branch_depth + 1))
 
         for orelse in node.orelse:
-            child_plans.append(create_plan_tree(orelse, if_depth))
+            subtrees.append(create_cctree(orelse, if_depth, branch_depth + 1))
 
-        return PlanTree(node, if_depth, node.lineno, child_plans)
+        identifiers = get_expression_identifiers(node.test)
+        mpi = len(identifiers) + test_depth + branch_depth + (1 if len(identifiers) == 0 else 0)
+        return CCTree(node, if_depth, node.lineno, branch_depth, mpi, subtrees)
 
     if (isinstance(node, ast.Break) or isinstance(node, ast.Continue) or isinstance(node, ast.Pass)
             or isinstance(node, ast.Import) or isinstance(node, ast.ImportFrom)):
-        return PlanTree(node, branch_depth + 1, node.lineno, [])
+        mpi = branch_depth + 1
+        return CCTree(node, parent_plan_depth + 1, node.lineno, branch_depth, mpi,[])
 
     raise NotImplementedError(f"Node type {type(node).__name__} is not supported")
 
-def depth_from_plan_tree(plan_tree: PlanTree) -> int:
-    if not plan_tree.child_plans:
-        return plan_tree.depth
-    return max(depth_from_plan_tree(child) for child in plan_tree.child_plans)
+def compute_cccp(p: Path):
+    src = p.read_text(encoding="utf-8")
+    tree = ast.parse(textwrap.dedent(src))
+    cct = create_cctree(tree, 0, 0)
+    print(f'CCCP-PD and CCCP-MPI for {p} are {cct.get_depth_plan()} and {cct.get_mpi()}')
 
-def depth_from_source(source: str) -> int:
-    tree = ast.parse(textwrap.dedent(source))
-    plan_tree = create_plan_tree(tree, 0)
-    return depth_from_plan_tree(plan_tree)
 
-def depth_from_file(path: Path) -> int:
-    return depth_from_source(path.read_text(encoding="utf‑8"))
-
-def compute_cccp(p):
-    print(f'CCCP for {p} is {depth_from_file(p)}')
