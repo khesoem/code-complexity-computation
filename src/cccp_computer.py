@@ -51,6 +51,20 @@ def expression_depth(node: ast.expr) -> (int, set): # returns depth and a list o
     elif isinstance(node, ast.UnaryOp):
         return expression_depth(node.operand)[0] + 1, set()
 
+    elif isinstance(node, ast.BoolOp):
+        if not node.values:
+            return 0, set()
+
+        child_depths = [expression_depth(value) for value in node.values]
+        max_depth = max(depth[0] for depth in child_depths)
+
+        child_ops = set()
+        for depth, ops in child_depths:
+            child_ops = child_ops.union(ops)
+
+        all_ops = child_ops.union(set(type(node.op).__name__))
+        return max_depth + (1 if len(child_ops) != len(all_ops) else 0), all_ops
+
     elif isinstance(node, ast.Call):
         if not node.args:
             return 1, set()
@@ -60,7 +74,9 @@ def expression_depth(node: ast.expr) -> (int, set): # returns depth and a list o
         return 1, set()
 
     elif isinstance(node, list):
-        return 1, set()
+        if not node:
+            return 1, set()
+        return max(expression_depth(elt)[0] for elt in node), set()
 
     elif isinstance(node, ast.List)or isinstance(node, ast.Tuple):
         return max(expression_depth(elt)[0] for elt in node.elts) + 1, set()
@@ -71,7 +87,7 @@ def expression_depth(node: ast.expr) -> (int, set): # returns depth and a list o
     else:
         return 0, set()
 
-def get_expression_identifiers(node: ast.expr) -> set:
+def get_expression_identifiers(node: ast.expr, exclude_store_identifiers: bool=False) -> set:
     """
     Returns a set of identifiers used in the expression.
     """
@@ -87,6 +103,12 @@ def get_expression_identifiers(node: ast.expr) -> set:
     elif isinstance(node, ast.UnaryOp):
         return get_expression_identifiers(node.operand)
 
+    elif isinstance(node, ast.BoolOp):
+        identifiers = set()
+        for value in node.values:
+            identifiers.update(get_expression_identifiers(value))
+        return identifiers
+
     elif isinstance(node, ast.Call):
         identifiers = {node.func.id} if isinstance(node.func, ast.Name) else set()
         for arg in node.args:
@@ -94,10 +116,16 @@ def get_expression_identifiers(node: ast.expr) -> set:
         return identifiers
 
     elif isinstance(node, ast.Name):
+        if exclude_store_identifiers and isinstance(node.ctx, ast.Store):
+            # If the node is a Name in a tuple context, we do not count it as an identifier
+            return set()
         return {node.id}
 
     elif isinstance(node, list):
-        return set()
+        identifiers = set()
+        for elt in node:
+            identifiers.update(get_expression_identifiers(elt))
+        return identifiers
 
     elif isinstance(node, ast.List) or isinstance(node, ast.Tuple):
         identifiers = set()
@@ -118,21 +146,26 @@ def create_cctree(node: ast.AST, parent_plan_depth: int, branch_depth: int) -> C
 
     if isinstance(node, ast.Assign):
         exp_depth = expression_depth(node.value)[0]
-        plan_depth = exp_depth + 1 + parent_plan_depth
-        identifiers = (get_expression_identifiers(node.value)
-                       .union({target.id for target in node.targets if isinstance(target, ast.Name)}))
+        left_depth = max([expression_depth(target)[0] for target in node.targets])
+        assignment_depth = max(exp_depth + 1, left_depth) # if left is just an identifier, its complexity is already counted in the assignment operation (+1)
+        plan_depth = assignment_depth + parent_plan_depth
+        exp_identifiers = get_expression_identifiers(node.value)
+        loaded_identifiers = exp_identifiers
+        for target in node.targets:
+            loaded_identifiers = loaded_identifiers.union(get_expression_identifiers(target, exclude_store_identifiers=True))
 
-        """mpi is sum of branch depth, plan depth of the expression, and number of identifiers, 
-            minus one if there are identifiers in the expression to avoid double-counting the identifier"""
-        mpi = len(identifiers) + exp_depth + branch_depth + (1 if len(identifiers) == 0 else 0)
+        """mpi is sum of branch depth, plan depth of the expression, and number of identifiers minus one as the one identifier is already counted in the plan depth"""
+        mpi = len(loaded_identifiers) + assignment_depth + branch_depth - 1
         return CCTree(node, plan_depth, node.lineno, branch_depth, mpi, [])
 
     if isinstance(node, ast.AugAssign):
         exp_depth = expression_depth(node.value)[0]
-        plan_depth = expression_depth(node.value)[0] + 2 + parent_plan_depth
-        identifiers = (get_expression_identifiers(node.value)
-                       .union({node.target.id if isinstance(node.target, ast.Name) else set()}))
-        mpi = len(identifiers) + exp_depth + branch_depth + 1 + (1 if len(identifiers) == 0 else 0)
+        left_depth = expression_depth(node.target)[0]
+        assignment_depth = max(exp_depth + 1, left_depth) + 1
+        plan_depth = assignment_depth + parent_plan_depth
+        exp_identifiers = get_expression_identifiers(node.value)
+        loaded_identifiers = (exp_identifiers.union(get_expression_identifiers(node.target, exclude_store_identifiers=True)))
+        mpi = len(loaded_identifiers) + assignment_depth + branch_depth - (1 if exp_depth > 0 else 0)
 
         return CCTree(node, plan_depth, node.lineno, branch_depth, mpi,[])
 
@@ -143,9 +176,9 @@ def create_cctree(node: ast.AST, parent_plan_depth: int, branch_depth: int) -> C
 
         exp_depth = max(expression_depth(arg)[0] for arg in node.value.args)
         plan_depth = exp_depth + 1 + parent_plan_depth
-        identifiers = (get_expression_identifiers(node.value)
-                       .union({node.value.func.id if isinstance(node.value.func, ast.Name) else set()}))
-        mpi = len(identifiers) + exp_depth + branch_depth + (1 if len(identifiers) == 0 else 0)
+        exp_identifiers = get_expression_identifiers(node.value)
+        loaded_identifiers = (exp_identifiers.union({node.value.func.id if isinstance(node.value.func, ast.Name) else set()}))
+        mpi = len(loaded_identifiers) + exp_depth + branch_depth + (1 if len(loaded_identifiers) == 0 else 0)
 
         return CCTree(node, plan_depth, node.lineno, branch_depth, mpi, [])
 
@@ -158,8 +191,8 @@ def create_cctree(node: ast.AST, parent_plan_depth: int, branch_depth: int) -> C
         for child in node.body:
             subtrees.append(create_cctree(child, for_depth, branch_depth + 1))
 
-        identifiers = get_expression_identifiers(node.iter)
-        mpi = len(identifiers) + iter_depth + branch_depth + (1 if len(identifiers) == 0 else 0)
+        loaded_identifiers = get_expression_identifiers(node.iter)
+        mpi = len(loaded_identifiers) + iter_depth + branch_depth + (1 if len(loaded_identifiers) == 0 else 0)
         return CCTree(node, for_depth, node.lineno, branch_depth, mpi, subtrees)
 
     if isinstance(node, ast.While):
@@ -171,8 +204,8 @@ def create_cctree(node: ast.AST, parent_plan_depth: int, branch_depth: int) -> C
         for child in node.body:
             subtrees.append(create_cctree(child, while_depth, branch_depth + 1))
 
-        identifiers = get_expression_identifiers(node.test)
-        mpi = len(identifiers) + test_depth + branch_depth + (1 if len(identifiers) == 0 else 0)
+        loaded_identifiers = get_expression_identifiers(node.test)
+        mpi = len(loaded_identifiers) + test_depth + branch_depth + (1 if len(loaded_identifiers) == 0 else 0)
 
         return CCTree(node, while_depth, node.lineno, branch_depth, mpi, subtrees)
 
@@ -188,8 +221,8 @@ def create_cctree(node: ast.AST, parent_plan_depth: int, branch_depth: int) -> C
         for orelse in node.orelse:
             subtrees.append(create_cctree(orelse, if_depth, branch_depth + 1))
 
-        identifiers = get_expression_identifiers(node.test)
-        mpi = len(identifiers) + test_depth + branch_depth + (1 if len(identifiers) == 0 else 0)
+        loaded_identifiers = get_expression_identifiers(node.test)
+        mpi = len(loaded_identifiers) + test_depth + branch_depth + (1 if len(loaded_identifiers) == 0 else 0)
         return CCTree(node, if_depth, node.lineno, branch_depth, mpi, subtrees)
 
     if (isinstance(node, ast.Break) or isinstance(node, ast.Continue) or isinstance(node, ast.Pass)
