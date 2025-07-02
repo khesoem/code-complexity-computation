@@ -22,7 +22,7 @@ def main() -> None:
 
     for root, dirs, files in os.walk(root_dir):
         for file in files:
-            if file.endswith(".py") and 'wrapped' not in file and 'sum' in file:
+            if file.endswith(".py") and 'wrapped' not in file and '' in file:
                 cccp.compute_cccp(Path(os.path.join(root, file)))
 
 if __name__ == "__main__":
