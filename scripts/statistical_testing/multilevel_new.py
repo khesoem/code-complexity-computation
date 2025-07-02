@@ -3,7 +3,7 @@ import pandas as pd
 import statsmodels.formula.api as smf
 
 # 1. Load the data
-df = pd.read_csv("../../results/revised_complexities_and_manual_cl.csv")
+df = pd.read_csv("../../results/revised_complexities_and_eeg_cl.csv")
 
 # 2. Drop missing data in any of the relevant columns
 needed_cols = ["subject","ID","rating","DD","Halstead","LOC","Cyclomatic","CCCPPD","CCCPMDI","DDold","Halsteadold","LOCold","Cyclomaticold","CCCPPDold","CCCPMPIold"]
@@ -16,7 +16,7 @@ df.reset_index(drop=True, inplace=True)
 
 # 4. (Optional) Scale all metrics (M1..M6)
 #    We'll create new columns scale_M1..scale_M6
-metric_names = ["DD","Halstead","LOC","Cyclomatic","CCCPPD","CCCPMDI","DDold","Halsteadold","LOCold","Cyclomaticold","CCCPPDold","CCCPMPIold"]
+metric_names = ["DD","Halstead","LOC","Cyclomatic","CCCPMDI"]
 for m in metric_names:
     df[f"scale_{m}"] = (df[m] - df[m].mean()) / df[m].std()
 
@@ -60,8 +60,6 @@ print(results_df)
 # -----------------------------------------------------------
 
 # Build a formula with all six scaled metrics
-print('rating ~ ' + ' + '.join([f'scale_{m}' for m in metric_names]))
-
 all_metrics_formula = (
     'rating ~ ' + ' + '.join([f'scale_{m}' for m in metric_names])
 )

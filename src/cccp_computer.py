@@ -82,7 +82,10 @@ def expression_depth(node: ast.expr) -> (int, set): # returns depth and a list o
         return max(expression_depth(elt)[0] for elt in node.elts) + 1, set()
 
     elif isinstance(node, ast.Subscript):
-        return max(expression_depth(node.value)[0], expression_depth(node.slice)[0]) + 1, set()
+        if isinstance(node.value, ast.Subscript): # reading the (i+1)th dimension of an array is different from and child of reading the i-th dimension
+            return expression_depth(node.value)[0] + expression_depth(node.slice)[0] + 1, set()
+        else:
+            return max(expression_depth(node.value)[0], expression_depth(node.slice)[0]) + 1, set()
 
     else:
         return 0, set()
