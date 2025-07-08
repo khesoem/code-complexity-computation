@@ -1,6 +1,6 @@
-with open('../../results/revised_complexities.csv', 'r') as revised:
-    with open('../../results/organizedformultilevel.csv', 'r') as old:
-        with open('../../results/revised_complexities_and_manual_cl.csv', 'w') as merged:
+with open('../../results/backup_result_files/revised_complexities.csv', 'r') as revised:
+    with open('../../results/backup_result_files/organizedformultilevel.csv', 'r') as old:
+        with open('../../results/backup_result_files/revised_complexities_and_manual_cl.csv', 'w') as merged:
             revised_lines = revised.readlines()
             old_lines = old.readlines()
             revised_data = {}
@@ -18,9 +18,9 @@ with open('../../results/revised_complexities.csv', 'r') as revised:
                 rating = elems[2]
                 merged.write(f'{subject},{id},{rating},{",".join((revised_data.get(id)[2:]))}\n')
 
-with open('../../results/revised_complexities.csv', 'r') as revised:
-    with open('../../results/old_eeg_and_complexity_results.csv', 'r') as old:
-        with open('../../results/revised_complexities_and_eeg_cl.csv', 'w') as merged:
+with open('../../results/backup_result_files/revised_complexities.csv', 'r') as revised:
+    with open('../../results/backup_result_files/old_eeg_and_complexity_results.csv', 'r') as old:
+        with open('../../results/backup_result_files/revised_complexities_and_eeg_cl.csv', 'w') as merged:
             revised_lines = revised.readlines()
             old_lines = old.readlines()
             revised_data = {}

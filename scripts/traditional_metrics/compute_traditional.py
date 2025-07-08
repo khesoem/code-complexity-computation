@@ -3,7 +3,7 @@ import os
 from radon.raw import analyze
 from radon.metrics import h_visit
 
-with open('../../results/cc_loc_andincorrecthalstead.csv', 'w') as res:
+with open('../../results/backup_result_files/cc_loc_andincorrecthalstead.csv', 'w') as res:
     res.write("file,sloc,cc,halstead_vocabulary\n")
     for root, dirs, files in os.walk('../../samples/'):
         for file in files:

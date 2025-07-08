@@ -167,7 +167,7 @@ def create_cctree(node: ast.AST, parent_plan_depth: int, branch_depth: int) -> C
         assignment_depth = max(exp_depth + 1, left_depth) + 1
         plan_depth = assignment_depth + parent_plan_depth
         exp_identifiers = get_expression_identifiers(node.value)
-        loaded_identifiers = (exp_identifiers.union(get_expression_identifiers(node.target, exclude_store_identifiers=True)))
+        loaded_identifiers = (exp_identifiers.union(get_expression_identifiers(node.target, exclude_store_identifiers=False)))
         mpi = len(loaded_identifiers) + assignment_depth + branch_depth - (1 if exp_depth > 0 else 0)
 
         return CCTree(node, plan_depth, node.lineno, branch_depth, mpi,[])
