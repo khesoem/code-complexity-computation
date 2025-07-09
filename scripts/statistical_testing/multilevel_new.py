@@ -5,10 +5,10 @@ def compute_correlations(target_prediction, cccp_metric, old_suffix):
     print(f"Computing correlations for predictor: {target_prediction}, CCCP metric: {cccp_metric}, old suffix: {old_suffix}")
 
     # 1. Load the data
-    df = pd.read_csv("../../results/final_results.csv")
+    df = pd.read_csv("../../results/complexities_and_CLs.csv")
 
     # 2. Drop missing data in any of the relevant columns
-    needed_cols = ["subject","ID","manual_cl","DD","Halstead","LOC","Cyclomatic","CCCPPD","CCCPMPI","DDold","Halsteadold","LOCold","Cyclomaticold","CCCPPDold","CCCPMPIold","eeg_cl_fzpz34","eeg_cl_fz34pz34","eeg_cl_fzpz"]
+    needed_cols = ["subject","ID","manual_cl","DD","Halstead","LOC","Cyclomatic","CCCPPD","CCCPMPI","DDold","Halsteadold","LOCold","Cyclomaticold","CCCPPDold","CCCPMPIold",f"{target_prediction}"]
     df = df.dropna(subset=needed_cols).copy()
 
     # 3. Convert subject and ID to categorical, reset the index
@@ -79,24 +79,10 @@ def compute_correlations(target_prediction, cccp_metric, old_suffix):
     print(mdf_all.summary())
 
 compute_correlations("eeg_cl_fzpz34", "CCCPPD", "")
-compute_correlations("eeg_cl_fz34pz34", "CCCPPD", "")
+compute_correlations("eeg_cl_fzpz34", "CCCPPD", "")
 compute_correlations("eeg_cl_fzpz", "CCCPPD", "")
+compute_correlations("manual_cl", "CCCPPD", "")
 compute_correlations("eeg_cl_fzpz34", "CCCPMPI", "")
 compute_correlations("eeg_cl_fz34pz34", "CCCPMPI", "")
 compute_correlations("eeg_cl_fzpz", "CCCPMPI", "")
-# import numpy as np
-# df = pd.read_csv("../../results/final_results.csv")
-# olddf = pd.read_csv("../../results/revised_complexities_and_eeg_cl.csv")
-# df["eeg_cl_fzpz34"] = pd.to_numeric(df["eeg_cl_fzpz34"], errors="coerce")
-# olddf["rating"] = pd.to_numeric(olddf["rating"], errors="coerce")
-# df = df[np.isfinite(df["eeg_cl_fzpz34"])]
-# olddf = olddf[np.isfinite(olddf["rating"])]
-# df["eeg_cl_fzpz34"] = df["eeg_cl_fzpz34"].round(0).astype(int)
-# olddf["rating"] = olddf["rating"].round(0).astype(int)
-#
-# eeg_vals = df["eeg_cl_fzpz34"].tolist()
-# old_eeg_vals = olddf["rating"].tolist()
-# if eeg_vals != old_eeg_vals:
-#     print("EEG values do not match between the two datasets. Please check the data.")
-#
-# print(eeg_vals)
+compute_correlations("manual_cl", "CCCPMPI", "")

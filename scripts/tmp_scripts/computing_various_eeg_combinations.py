@@ -36,4 +36,7 @@ eeg_df["match_key"] = eeg_df.apply(make_key_from_eeg, axis=1)
 df = complexities_df.merge(eeg_df, on="match_key", how="left", suffixes=("", "_y"))
 df = df[complexities_df.columns.drop('match_key').tolist() + ["eeg_cl_fzpz34", "eeg_cl_fz34pz34", "eeg_cl_fzpz"]]
 
-df.to_csv("../../results/final_results.csv", index=False)
+df.loc[df["ID"] == 6, "LOC"] = 11 # Correcting LOC for ID 6
+df.loc[df["ID"] == 6, "Cyclomatic"] = 5 # Correcting LOC for ID 6
+
+df.to_csv("../../results/complexities_and_CLs.csv", index=False)
