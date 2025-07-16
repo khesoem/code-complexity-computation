@@ -14,37 +14,6 @@ Model:            MixedLM Dependent Variable: eeg_cl_fzpz34
 No. Observations: 267     Method:             REML
 No. Groups:       21      Scale:              5.9534
 Min. group size:  12      Log-Likelihood:     -729.8107
-Max. group size:  13      Converged:          Yes          
-Mean group size:  12.7
------------------------------------------------------------
-                 Coef.  Std.Err.   z    P>|z| [0.025 0.975]
------------------------------------------------------------
-Intercept         4.591    0.564  8.138 0.000  3.486  5.697
-scale_DD          0.131    0.289  0.452 0.651 -0.436  0.698
-scale_Halstead    0.427    0.469  0.910 0.363 -0.493  1.346
-scale_LOC        -0.358    0.562 -0.638 0.524 -1.459  0.742
-scale_Cyclomatic -0.103    0.467 -0.221 0.825 -1.019  0.812
-scale_CCCPPD      0.376    0.414  0.908 0.364 -0.435  1.187
-Group Var         5.737
-ID Var            6.061
-===========================================================
-
-Computing correlations for predictor: eeg_cl_fzpz34, CCCP metric: CCCPPD, old suffix:
-=== Comparison of Single-Metric Models (sorted by AIC) ===
-       metric  AIC  BIC      LogLik      coef   p-value
-0          DD  NaN  NaN -731.554403  0.261067  0.221504
-1    Halstead  NaN  NaN -731.401000  0.286662  0.179357
-2         LOC  NaN  NaN -732.286631 -0.034174  0.873244
-3  Cyclomatic  NaN  NaN -732.273477 -0.049333  0.817717
-4      CCCPPD  NaN  NaN -730.192887  0.437714  0.039273
-
-=== Combined Model with All 5 Metrics ===
-           Mixed Linear Model Regression Results
-===========================================================
-Model:            MixedLM Dependent Variable: eeg_cl_fzpz34
-No. Observations: 267     Method:             REML
-No. Groups:       21      Scale:              5.9534
-Min. group size:  12      Log-Likelihood:     -729.8107
 Max. group size:  13      Converged:          Yes
 Mean group size:  12.7
 -----------------------------------------------------------
@@ -59,6 +28,37 @@ scale_CCCPPD      0.376    0.414  0.908 0.364 -0.435  1.187
 Group Var         5.737
 ID Var            6.061
 ===========================================================
+
+Computing correlations for predictor: eeg_cl_fz34pz34, CCCP metric: CCCPPD, old suffix:
+=== Comparison of Single-Metric Models (sorted by AIC) ===
+       metric  AIC  BIC      LogLik      coef   p-value
+0          DD  NaN  NaN -497.066551  0.059871  0.491003
+1    Halstead  NaN  NaN -496.611687  0.102224  0.238980
+2         LOC  NaN  NaN -497.218769 -0.035790  0.680784
+3  Cyclomatic  NaN  NaN -497.224124 -0.034770  0.689191
+4      CCCPPD  NaN  NaN -495.611266  0.159511  0.064878
+
+=== Combined Model with All 5 Metrics ===
+            Mixed Linear Model Regression Results
+=============================================================
+Model:            MixedLM Dependent Variable: eeg_cl_fz34pz34
+No. Observations: 267     Method:             REML
+No. Groups:       21      Scale:              1.0748
+Min. group size:  12      Log-Likelihood:     -498.7788
+Max. group size:  13      Converged:          Yes
+Mean group size:  12.7
+-------------------------------------------------------------
+                   Coef.  Std.Err.   z    P>|z| [0.025 0.975]
+-------------------------------------------------------------
+Intercept           2.899    0.276 10.493 0.000  2.358  3.441
+scale_DD           -0.001    0.118 -0.007 0.995 -0.232  0.230
+scale_Halstead      0.151    0.191  0.793 0.428 -0.223  0.525
+scale_LOC          -0.128    0.228 -0.562 0.574 -0.576  0.319
+scale_Cyclomatic   -0.070    0.190 -0.368 0.713 -0.442  0.303
+scale_CCCPPD        0.176    0.168  1.042 0.297 -0.155  0.506
+Group Var           1.447
+ID Var              0.914
+=============================================================
 
 Computing correlations for predictor: eeg_cl_fzpz, CCCP metric: CCCPPD, old suffix:
 === Comparison of Single-Metric Models (sorted by AIC) ===

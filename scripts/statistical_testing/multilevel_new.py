@@ -78,11 +78,31 @@ def compute_correlations(target_prediction, cccp_metric, old_suffix):
     print("\n=== Combined Model with All 5 Metrics ===")
     print(mdf_all.summary())
 
-compute_correlations("eeg_cl_fzpz34", "CCCPPD", "")
-compute_correlations("eeg_cl_fzpz34", "CCCPPD", "")
-compute_correlations("eeg_cl_fzpz", "CCCPPD", "")
-compute_correlations("manual_cl", "CCCPPD", "")
-compute_correlations("eeg_cl_fzpz34", "CCCPMPI", "")
-compute_correlations("eeg_cl_fz34pz34", "CCCPMPI", "")
-compute_correlations("eeg_cl_fzpz", "CCCPMPI", "")
-compute_correlations("manual_cl", "CCCPMPI", "")
+    return results_df, mdf_all
+
+pdes, pdec = compute_correlations("eeg_cl_fzpz34", "CCCPPD", "")
+# compute_correlations("eeg_cl_fz34pz34", "CCCPPD", "")
+# compute_correlations("eeg_cl_fzpz", "CCCPPD", "")
+pdms, pdmc = compute_correlations("manual_cl", "CCCPPD", "")
+mpes, mpec = compute_correlations("eeg_cl_fzpz34", "CCCPMPI", "")
+# compute_correlations("eeg_cl_fz34pz34", "CCCPMPI", "")
+# compute_correlations("eeg_cl_fzpz", "CCCPMPI", "")
+mpms, mpmc = compute_correlations("manual_cl", "CCCPMPI", "")
+
+print(f'Cyclomatic & {pdes.loc[pdes["metric"] == "Cyclomatic"]["LogLik"].iloc[0].round(2)} & {pdes.loc[pdes["metric"] == "Cyclomatic"]["coef"].iloc[0].round(2)} & {"<0.001" if pdes.loc[pdes["metric"] == "Cyclomatic"]["p-value"].iloc[0].round(3) < 0.001 else pdes.loc[pdes["metric"] == "Cyclomatic"]["p-value"].iloc[0].round(3)}', end=" & ")
+print(f'{pdms.loc[pdms["metric"] == "Cyclomatic"]["LogLik"].iloc[0].round(2)} & {pdms.loc[pdms["metric"] == "Cyclomatic"]["coef"].iloc[0].round(2)} & {"<0.001" if pdms.loc[pdms["metric"] == "Cyclomatic"]["p-value"].iloc[0].round(3) < 0.001 else pdms.loc[pdms["metric"] == "Cyclomatic"]["p-value"].iloc[0].round(3)} \\\\')
+
+print(f'DD & {pdes.loc[pdes["metric"] == "DD"]["LogLik"].iloc[0].round(2)} & {pdes.loc[pdes["metric"] == "DD"]["coef"].iloc[0].round(2)} & {"<0.001" if pdes.loc[pdes["metric"] == "DD"]["p-value"].iloc[0].round(3) < 0.001 else pdes.loc[pdes["metric"] == "DD"]["p-value"].iloc[0].round(3)}', end=" & ")
+print(f'{pdms.loc[pdms["metric"] == "DD"]["LogLik"].iloc[0].round(2)} & {pdms.loc[pdms["metric"] == "DD"]["coef"].iloc[0].round(2)} & {"<0.001" if pdms.loc[pdms["metric"] == "DD"]["p-value"].iloc[0].round(3) < 0.001 else pdms.loc[pdms["metric"] == "DD"]["p-value"].iloc[0].round(3)} \\\\')
+
+print(f'Halstead & {pdes.loc[pdes["metric"] == "Halstead"]["LogLik"].iloc[0].round(2)} & {pdes.loc[pdes["metric"] == "Halstead"]["coef"].iloc[0].round(2)} & {"<0.001" if pdes.loc[pdes["metric"] == "Halstead"]["p-value"].iloc[0].round(3) < 0.001 else pdes.loc[pdes["metric"] == "Halstead"]["p-value"].iloc[0].round(3)}', end=" & ")
+print(f'{pdms.loc[pdms["metric"] == "Halstead"]["LogLik"].iloc[0].round(2)} & {pdms.loc[pdms["metric"] == "Halstead"]["coef"].iloc[0].round(2)} & {"<0.001" if pdms.loc[pdms["metric"] == "Halstead"]["p-value"].iloc[0].round(3) < 0.001 else pdms.loc[pdms["metric"] == "Halstead"]["p-value"].iloc[0].round(3)} \\\\')
+
+print(f'LOC & {pdes.loc[pdes["metric"] == "LOC"]["LogLik"].iloc[0].round(2)} & {pdes.loc[pdes["metric"] == "LOC"]["coef"].iloc[0].round(2)} & {"<0.001" if pdes.loc[pdes["metric"] == "LOC"]["p-value"].iloc[0].round(3) < 0.001 else pdes.loc[pdes["metric"] == "LOC"]["p-value"].iloc[0].round(3)}', end=" & ")
+print(f'{pdms.loc[pdms["metric"] == "LOC"]["LogLik"].iloc[0].round(2)} & {pdms.loc[pdms["metric"] == "LOC"]["coef"].iloc[0].round(2)} & {"<0.001" if pdms.loc[pdms["metric"] == "LOC"]["p-value"].iloc[0].round(3) < 0.001 else pdms.loc[pdms["metric"] == "LOC"]["p-value"].iloc[0].round(3)} \\\\')
+
+print(f'CCCP-PD & {pdes.loc[pdes["metric"] == "CCCPPD"]["LogLik"].iloc[0].round(2)} & {pdes.loc[pdes["metric"] == "CCCPPD"]["coef"].iloc[0].round(2)} & {"<0.001" if pdes.loc[pdes["metric"] == "CCCPPD"]["p-value"].iloc[0].round(3) < 0.001 else pdes.loc[pdes["metric"] == "CCCPPD"]["p-value"].iloc[0].round(3)}', end=" & ")
+print(f'{pdms.loc[pdms["metric"] == "CCCPPD"]["LogLik"].iloc[0].round(2)} & {pdms.loc[pdms["metric"] == "CCCPPD"]["coef"].iloc[0].round(2)} & {"<0.001" if pdms.loc[pdms["metric"] == "CCCPPD"]["p-value"].iloc[0].round(3) < 0.001 else pdms.loc[pdms["metric"] == "CCCPPD"]["p-value"].iloc[0].round(3)} \\\\')
+
+print(f'CCCP-MPI & {mpes.loc[mpes["metric"] == "CCCPMPI"]["LogLik"].iloc[0].round(2)} & {mpes.loc[mpes["metric"] == "CCCPMPI"]["coef"].iloc[0].round(2)} & {"<0.001" if mpes.loc[mpes["metric"] == "CCCPMPI"]["p-value"].iloc[0].round(3) < 0.001 else mpes.loc[mpes["metric"] == "CCCPMPI"]["p-value"].iloc[0].round(3)}', end=" & ")
+print(f'{mpms.loc[mpms["metric"] == "CCCPMPI"]["LogLik"].iloc[0].round(2)} & {mpms.loc[mpms["metric"] == "CCCPMPI"]["coef"].iloc[0].round(2)} & {"<0.001" if mpms.loc[mpms["metric"] == "CCCPMPI"]["p-value"].iloc[0].round(3) < 0.001 else mpms.loc[mpms["metric"] == "CCCPMPI"]["p-value"].iloc[0].round(3)} \\\\')

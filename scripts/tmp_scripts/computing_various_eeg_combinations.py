@@ -6,7 +6,8 @@ eeg_df['eeg_cl_fzpz34']= eeg_df['Theta+AF8-Fz'] / eeg_df['Alpha+AF8-P3PzP4']
 eeg_df['eeg_cl_fz34pz34']= eeg_df['Theta+AF8-F3F4Fz'] / eeg_df['Alpha+AF8-P3PzP4']
 eeg_df['eeg_cl_fzpz']= eeg_df['Theta+AF8-Fz'] / eeg_df['Alpha+AF8-Pz']
 
-complexities_df = pd.read_csv("../../results/backup_result_files/revised_complexities_and_manual_cl.csv")
+complexities_df = pd.read_csv(
+    "../../results/backup_result_files/revised_complexities_and_manual_cl_CC_LOC_are_wrong.csv")
 complexities_df = complexities_df.rename(columns={"rating": "manual_cl"})
 
 id_mapping_df = pd.read_csv("../../results/backup_result_files/program_id_to_snippet_id.csv")
