@@ -1,58 +1,48 @@
 #!/usr/bin/env python3
 """
-EEG ↔️ Code-Complexity Correlation Utility
------------------------------------------
+EEG ↔️ Code‑Complexity Correlation Utility (survey‑only edition)
+--------------------------------------------------------------
 
-This script fits (linear) mixed-effects models to quantify how strongly various
-code-complexity metrics predict either
+This revision makes **no changes to the mixed‑effects logic** but restores the
+behaviour of the former “all‑in‑one CSV” workflow when the metrics table now
+contains *one row per snippet* (instead of one per participant‑snippet pair).
 
-* an **EEG-based comprehension difficulty proxy** (default: ``ThetaAlphaRatio``), or
-* **self-reported comprehension difficulty**, i.e. the ``SurveyCL`` ratings in
-  *snippet_metrics.csv* (activate via the ``--survey`` flag).
+➤ **Automatic join mode**
 
-The script prints *exactly two* machine-readable lines per run:
+* If the metrics table has a *unique* row for every `SnippetID`, the script
+  joins on `SnippetID` only (many‑to‑one) and happily propagates the same metric
+  values to every participant.
+* Otherwise it falls back to a strict `Participant + SnippetID` join, exactly
+  like the original.
 
-    1. **SINGLE**   – coefficient & p-value of the focal metric in the
-       single-predictor ("one metric at a time") model, plus whether it is the
-       highest (most-positive) coefficient.
-    2. **COMBINED** – the same, but for the full multi-predictor model.
+No command‑line flags: tweak the constants below and run `python eeg_cc_complexity.py`.
 
-Example output for ``cccp_metric = "CCCPMPI"`` and the default EEG target::
-
-    SINGLE:  CCCPMPI  coef = 0.052  p = 0.172  (best)
-    COMBINED:CCCPMPI  coef = 0.106  p = 0.205  (best)
-
-When the focal metric is **not** the most-positive coefficient, the line
-mentions the actual best metric, e.g.::
-
-    SINGLE:  CCCPPD  coef = 0.034  p = 0.233  (¬best, top = LOC 0.078)
-
-Command-line usage
-~~~~~~~~~~~~~~~~~~
-
-```
-python eeg_cc_complexity_updated.py            # EEG-based (ThetaAlphaRatio)
-python eeg_cc_complexity_updated.py --survey   # SurveyCL ratings
-```
 """
 from __future__ import annotations
 
-import argparse
 import warnings
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Any, Dict, List
 
 import pandas as pd
 import statsmodels.formula.api as smf
 
 ###############################################################################
-# Helper functions                                                            #
+# Configuration                                                                #
+###############################################################################
+
+TARGET_PREDICTION: str = "CL"                     # Column to predict
+SURVEY_PATH: Path = Path("eeg.csv")          # CL ratings (Participant, SnippetID, CL)
+METRICS_PATH: Path = Path("snippet_metrics.csv") # Complexity metrics table
+CCCP_METRICS: tuple[str, ...] = ("CCCPPD", "CCCPMPI")  # CCCP metrics to iterate over
+OLD_SUFFIX: str = ""                               # Legacy suffix for column names, if any
+
+###############################################################################
+# Helper functions                                                             #
 ###############################################################################
 
 def _safe_get(mapping: Dict[str, Any], key: str, default: float = float("nan")) -> float:
-    """Return *mapping[key]* or *default* if the key is absent or the value is
-    not finite (mixed-effects sometimes returns NaNs when the fit fails).
-    """
+    """Return *mapping[key]* or *default* if missing/NaN/inf."""
     val = mapping.get(key, default)
     try:
         return float(val)
@@ -60,71 +50,67 @@ def _safe_get(mapping: Dict[str, Any], key: str, default: float = float("nan")) 
         return default
 
 ###############################################################################
-# Core utility                                                                #
+# Core utility                                                                 #
 ###############################################################################
 
 def compute_correlations(
-    target_prediction: str,
     cccp_metric: str,
     *,
-    old_suffix: str = "",
-    prediction_source: str = "eeg",  # "eeg" (default) or "metrics"
-    eeg_path: str | Path = "eeg.csv",
-    metrics_path: str | Path = "snippet_metrics.csv",
+    target_prediction: str = TARGET_PREDICTION,
+    survey_path: Path = SURVEY_PATH,
+    metrics_path: Path = METRICS_PATH,
+    old_suffix: str = OLD_SUFFIX,
 ) -> None:
-    """Fit mixed-effects models and print two succinct summary lines.
-
-    Parameters
-    ----------
-    target_prediction : str
-        Column to be predicted (either in *eeg.csv* or *snippet_metrics.csv*).
-    cccp_metric : str
-        Name of the focal CCCP metric, *without* the ``old_suffix``.
-    old_suffix : str, optional
-        Suffix appended to metric names in legacy tables (default: "").
-    prediction_source : {"eeg", "metrics"}, optional
-        Where to read *target_prediction* from. ``"eeg"`` expects the column
-        in *eeg.csv* (default). ``"metrics"`` expects it in *snippet_metrics.csv*.
-    eeg_path, metrics_path : str or pathlib.Path, optional
-        File locations (defaults point to the repository root).
-    """
+    """Fit mixed‑effects models and print two succinct summary lines."""
 
     # ------------------------------------------------------------------
     # 1. Load & harmonise data                                          #
     # ------------------------------------------------------------------
     key_cols: List[str] = ["Participant", "SnippetID"]
 
+    survey_df = pd.read_csv(survey_path)
     metrics_df = pd.read_csv(metrics_path)
+
+    # Ensure consistent dtypes for merge keys
     for col in key_cols:
-        metrics_df[col] = metrics_df[col].astype(str)
+        if col in survey_df.columns:
+            survey_df[col] = survey_df[col].astype(str)
+        if col in metrics_df.columns:
+            metrics_df[col] = metrics_df[col].astype(str)
 
-    if prediction_source == "eeg":
-        eeg_df = pd.read_csv(eeg_path)
-        for col in key_cols:
-            eeg_df[col] = eeg_df[col].astype(str)
+    if target_prediction not in survey_df.columns:
+        raise KeyError(f"Column '{target_prediction}' not found in {survey_path}.")
 
-        if target_prediction not in eeg_df.columns:
-            raise KeyError(
-                f"Column '{target_prediction}' not found in {eeg_path}. "
-                "Did you mean to use '--survey'?"
-            )
+    # ------------------------------------------------------------------
+    # 1a. Determine join strategy                                       #
+    # ------------------------------------------------------------------
+    #   • If metrics already repeat for every participant (old style),
+    #     merge on Participant+SnippetID (1‑to‑1).
+    #   • If each SnippetID appears exactly once, treat metrics as
+    #     snippet‑level constants -> drop Participant and merge on SnippetID.
 
-        eeg_cols = [*key_cols, target_prediction]
+    snippet_counts = metrics_df.groupby("SnippetID").size()
+    metrics_unique_per_snippet = (snippet_counts == 1).all()
+
+    if metrics_unique_per_snippet:
+        # Drop Participant (if present) – many participants share one metric row
+        metrics_join = metrics_df.drop(columns=["Participant"], errors="ignore")
         df = pd.merge(
+            survey_df,
+            metrics_join,
+            on="SnippetID",
+            how="inner",
+            validate="many_to_one",
+        )
+    else:
+        # Old behaviour: need exact (Participant, SnippetID) match
+        df = pd.merge(
+            survey_df,
             metrics_df,
-            eeg_df[eeg_cols],
             on=key_cols,
             how="inner",
             validate="one_to_one",
         )
-    elif prediction_source == "metrics":
-        if target_prediction not in metrics_df.columns:
-            raise KeyError(
-                f"Column '{target_prediction}' not found in {metrics_path}."
-            )
-        df = metrics_df.copy()
-    else:
-        raise ValueError("prediction_source must be 'eeg' or 'metrics'")
 
     # ------------------------------------------------------------------
     # 2. Drop rows with missing values                                  #
@@ -136,7 +122,7 @@ def compute_correlations(
         f"Cyclomatic{old_suffix}",
         f"{cccp_metric}{old_suffix}",
     ]
-    needed_cols: List[str] = [*key_cols, *metric_names, target_prediction]
+    needed_cols: List[str] = ["Participant", "SnippetID", *metric_names, target_prediction]
     df = df.dropna(subset=needed_cols)
     if df.empty:
         print(f"⚠️  No data after filtering – {cccp_metric} skipped.")
@@ -152,7 +138,7 @@ def compute_correlations(
         df[f"scale_{m}"] = (df[m] - df[m].mean()) / df[m].std()
 
     ####################################################################
-    # PART A – Single-predictor models                                 #
+    # PART A – Single‑predictor models                                 #
     ####################################################################
     single_results: List[Dict[str, Any]] = []
     for m in metric_names:
@@ -176,20 +162,12 @@ def compute_correlations(
                 }
             )
         except ValueError:
-            # Model failed – record NaNs so the focal metric can still be found
-            single_results.append(
-                {"metric": m, "coef": float("nan"), "p": float("nan")}
-            )
+            single_results.append({"metric": m, "coef": float("nan"), "p": float("nan")})
 
     focal_metric = f"{cccp_metric}{old_suffix}"
     single_by_metric = {r["metric"]: r for r in single_results}
-    focal_single = single_by_metric.get(
-        focal_metric, {"coef": float("nan"), "p": float("nan")}
-    )
-    best_single = max(
-        single_results,
-        key=lambda r: float("-inf") if pd.isna(r["coef"]) else r["coef"],
-    )  # most-positive coef
+    focal_single = single_by_metric.get(focal_metric, {"coef": float("nan"), "p": float("nan")})
+    best_single = max(single_results, key=lambda r: float("-inf") if pd.isna(r["coef"]) else r["coef"])
 
     best_single_flag = best_single["metric"] == focal_metric
 
@@ -200,9 +178,7 @@ def compute_correlations(
     combined_p = float("nan")
     best_comb_metric: str | None = None
     try:
-        formula_all = (
-            f"{target_prediction} ~ " + " + ".join(f"scale_{m}" for m in metric_names)
-        )
+        formula_all = f"{target_prediction} ~ " + " + ".join(f"scale_{m}" for m in metric_names)
         md_all = smf.mixedlm(
             formula=formula_all,
             data=df,
@@ -218,24 +194,17 @@ def compute_correlations(
         combined_coef = _safe_get(params, f"scale_{focal_metric}")
         combined_p = _safe_get(pvals, f"scale_{focal_metric}")
 
-        # determine best combined coefficient among considered metrics
         comb_metrics_coefs = {m: _safe_get(params, f"scale_{m}") for m in metric_names}
         best_comb_metric = max(comb_metrics_coefs, key=comb_metrics_coefs.get)
     except ValueError:
-        pass  # leave nan values; printing logic below will cope
+        pass
 
     best_comb_flag = best_comb_metric == focal_metric if best_comb_metric else False
 
     ####################################################################
-    # 4. Two-line report                                               #
+    # 4. Two‑line report                                               #
     ####################################################################
-    def _fmt_line(
-        label: str,
-        coef: float,
-        pval: float,
-        is_best: bool,
-        best_info: str | None = None,
-    ) -> str:
+    def _fmt_line(label: str, coef: float, pval: float, is_best: bool, best_info: str | None = None) -> str:
         base = f"{label:<9}{focal_metric:<9}coef = {coef:.3g}  p = {pval:.3g}"
         if pd.isna(coef):
             return f"{base}  (model failed)"
@@ -243,61 +212,18 @@ def compute_correlations(
             return f"{base}  (best)"
         return f"{base}  (¬best, top = {best_info})"
 
-    # build best-info strings only if needed
-    single_best_info = (
-        f"{best_single['metric']} {best_single['coef']:.3g}"
-        if not best_single_flag
-        else None
-    )
-    combined_best_info = None
-    if not best_comb_flag and best_comb_metric:
-        combined_best_info = (
-            f"{best_comb_metric} {_safe_get(params, f'scale_{best_comb_metric}'):.3g}"
-        )
-
-    print(
-        _fmt_line(
-            "SINGLE:",
-            focal_single["coef"],
-            focal_single["p"],
-            best_single_flag,
-            single_best_info,
-        )
-    )
-    print(
-        _fmt_line(
-            "COMBINED:",
-            combined_coef,
-            combined_p,
-            best_comb_flag,
-            combined_best_info,
-        )
+    single_best_info = f"{best_single['metric']} {best_single['coef']:.3g}" if not best_single_flag else None
+    combined_best_info = (
+        f"{best_comb_metric} {_safe_get(params, f'scale_{best_comb_metric}'):.3g}" if not best_comb_flag and best_comb_metric else None
     )
 
+    print(_fmt_line("SINGLE:", focal_single["coef"], focal_single["p"], best_single_flag, single_best_info))
+    print(_fmt_line("COMBINED:", combined_coef, combined_p, best_comb_flag, combined_best_info))
+
 ###############################################################################
-# CLI entry-point                                                             #
+# Script entry point                                                          #
 ###############################################################################
+
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description=(
-            "Fit mixed-effects models for code-complexity metrics against EEG "
-            "or SurveyCL comprehension difficulty targets."
-        )
-    )
-    parser.add_argument(
-        "--survey",
-        action="store_true",
-        help="Use SurveyCL ratings (snippet_metrics.csv) instead of EEG-based ThetaAlphaRatio predictions.",
-    )
-
-    args = parser.parse_args()
-
-    target_prediction = "SurveyCL" if args.survey else "ThetaAlphaRatio"
-    prediction_source = "metrics" if args.survey else "eeg"
-
-    for metric in ("CCCPPD", "CCCPMPI"):
-        compute_correlations(
-            target_prediction=target_prediction,
-            cccp_metric=metric,
-            prediction_source=prediction_source,
-        )
+    for metric in CCCP_METRICS:
+        compute_correlations(metric)
