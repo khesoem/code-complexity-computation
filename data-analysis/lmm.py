@@ -34,7 +34,7 @@ import statsmodels.formula.api as smf
 TARGET_PREDICTION: str = "CL"                     # Column to predict
 SURVEY_PATH: Path = Path("eeg.csv")          # CL ratings (Participant, SnippetID, CL)
 METRICS_PATH: Path = Path("snippet_metrics.csv") # Complexity metrics table
-CCCP_METRICS: tuple[str, ...] = ("CCCPPD", "CCCPMPI")  # CCCP metrics to iterate over
+MCC_METRICS: tuple[str, ...] = ("MCCPD", "MCCMPI")  # MCC metrics to iterate over
 OLD_SUFFIX: str = ""                               # Legacy suffix for column names, if any
 
 ###############################################################################
@@ -54,7 +54,7 @@ def _safe_get(mapping: Dict[str, Any], key: str, default: float = float("nan")) 
 ###############################################################################
 
 def compute_correlations(
-    cccp_metric: str,
+    mcc_metric: str,
     *,
     target_prediction: str = TARGET_PREDICTION,
     survey_path: Path = SURVEY_PATH,
@@ -120,12 +120,12 @@ def compute_correlations(
         f"Halstead{old_suffix}",
         f"LOC{old_suffix}",
         f"Cyclomatic{old_suffix}",
-        f"{cccp_metric}{old_suffix}",
+        f"{mcc_metric}{old_suffix}",
     ]
     needed_cols: List[str] = ["Participant", "SnippetID", *metric_names, target_prediction]
     df = df.dropna(subset=needed_cols)
     if df.empty:
-        print(f"⚠️  No data after filtering – {cccp_metric} skipped.")
+        print(f"⚠️  No data after filtering – {mcc_metric} skipped.")
         return
 
     # ------------------------------------------------------------------
@@ -164,7 +164,7 @@ def compute_correlations(
         except ValueError:
             single_results.append({"metric": m, "coef": float("nan"), "p": float("nan")})
 
-    focal_metric = f"{cccp_metric}{old_suffix}"
+    focal_metric = f"{mcc_metric}{old_suffix}"
     single_by_metric = {r["metric"]: r for r in single_results}
     focal_single = single_by_metric.get(focal_metric, {"coef": float("nan"), "p": float("nan")})
     best_single = max(single_results, key=lambda r: float("-inf") if pd.isna(r["coef"]) else r["coef"])
@@ -225,5 +225,5 @@ def compute_correlations(
 ###############################################################################
 
 if __name__ == "__main__":
-    for metric in CCCP_METRICS:
+    for metric in MCC_METRICS:
         compute_correlations(metric)

@@ -1,6 +1,6 @@
 import argparse
 import os
-import src.cccp_computer as cccp
+import src.mcc_computer as mcc
 from pathlib import Path
 
 def get_args():
@@ -22,8 +22,8 @@ def main() -> None:
 
     for root, dirs, files in os.walk(root_dir):
         for file in files:
-            if file.endswith(".py") and 'wrapped' not in file and '' in file:
-                cccp.compute_cccp(Path(os.path.join(root, file)))
+            if file.endswith(".py"):
+                mcc.compute_mcc(Path(os.path.join(root, file)))
 
 if __name__ == "__main__":
     main()

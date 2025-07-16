@@ -5,10 +5,6 @@ from pathlib import Path
 class CCTree:
     """
     A class representing a control flow tree node. The tree contains only certain types of AST nodes.
-    Plan_depth is the plan depth of the node, according to the CCCP paper.
-    Note that the plan depth for a node inside a for loop is larger than the for loop itself.
-    Branch_depth is the depth of the node in the control flow tree, i.e. how many branches are there.
-    mpi stands for max plan activity, per CCCP paper definition.
     """
     def __init__(self, node: ast.AST, plan_depth: int, line: int, branch_depth: int, mpi: int, subtrees: list):
         self.node = node
@@ -235,10 +231,10 @@ def create_cctree(node: ast.AST, parent_plan_depth: int, branch_depth: int) -> C
 
     raise NotImplementedError(f"Node type {type(node).__name__} is not supported")
 
-def compute_cccp(p: Path):
+def compute_mcc(p: Path):
     src = p.read_text(encoding="utf-8")
     tree = ast.parse(textwrap.dedent(src))
     cct = create_cctree(tree, 0, 0)
-    print(f'CCCP-PD and CCCP-MPI for {p} are {cct.get_depth_plan()} and {cct.get_mpi()}')
+    print(f'MCC-PD and MCC-MPI for {p} are {cct.get_depth_plan()} and {cct.get_mpi()}')
 
 

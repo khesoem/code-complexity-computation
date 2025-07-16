@@ -5,7 +5,6 @@ function eeg_pipeline()
 %   groups and frequency bands.
 % • Computes a single Theta/Alpha power ratio automatically.
 % • Removes snippets specified in cfg.post.bad_snippets.
-% • Collapses the numbering only across those *explicit* bad snippets.
 % -------------------------------------------------------------------------
 
 %% =========================================================================
@@ -15,27 +14,27 @@ cfg = struct();
 
 % --- Path Settings --------------------------------------------------------
 cfg.paths.script_dir    = fileparts(mfilename('fullpath'));
-cfg.paths.raw_data      = fullfile(cfg.paths.script_dir,'EEG');
+cfg.paths.raw_data      = fullfile(cfg.paths.script_dir,'EEG'); % Path to the folder containing M00 files
 cfg.paths.timestamps    = fullfile(cfg.paths.script_dir,'timestamps.csv');
-cfg.paths.output_csv    = fullfile(cfg.paths.script_dir,'eeg.csv'); %<-- FIXED output path
-cfg.paths.python_script = fullfile(cfg.paths.script_dir,'lmm.py');
+cfg.paths.output_csv    = fullfile(cfg.paths.script_dir,'../eeg.csv');
+cfg.paths.python_script = fullfile(cfg.paths.script_dir,'../lmm.py');
 cfg.paths.python_exe    = ...
-    'C:\Users\cemke\AppData\Local\Programs\Python\Python311\python.exe';
+    'path-to-python-vevn/.venv/bin/python';
 
 % --- Main On/Off Switches -------------------------------------------------
 cfg.do_cleaning         = false;
 
 % --- Filter settings ------------------------------------------------------
-cfg.filter.hp_cutoff    = 0.50;
-cfg.filter.lp_cutoff    = 40;
+cfg.filter.hp_cutoff    = 1.0;
+cfg.filter.lp_cutoff    = [];
 
 % --- Cleaning settings ----------------------------------------------------
-cfg.clean.asr_cutoff    = 100;
-cfg.clean.chan_corr     = 0.95;
-cfg.clean.flatline      = 0;
+cfg.clean.asr_cutoff    = 'off';
+cfg.clean.chan_corr     = 'off';
+cfg.clean.flatline      = Inf;
 
 % --- Analysis frequencies -------------------------------------------------
-cfg.freq.theta          = [4  8];
+cfg.freq.theta          = [4  7];
 cfg.freq.alpha          = [8 12];
 
 % --- SIMPLIFIED: Analysis metrics -----------------------------------------
@@ -47,10 +46,10 @@ cfg.freq.alpha          = [8 12];
 cfg.analysis.metrics = { ...
     struct('label',  'Theta_All', ...
            'band',   'theta', ...
-           'channels', {{'Fz'}}), ...
+           'channels', {{'Fz','F3','F4'}}), ...
     struct('label',  'Alpha_All', ...
            'band',   'alpha', ...
-           'channels', {{'P4','Pz','P3'}}) ...
+           'channels', {{'Pz','P3','P4'}}) ...
 };
 
 % --- Post‑processing ------------------------------------------------------
@@ -113,7 +112,7 @@ for v = 1:numel(cfg.variants)
     %% ---------------------------------------------------------------------
     for iP = 1:height(timestamps_T)
         participant_id = timestamps_T.Participant{iP};
-        m00_file = fullfile(c.paths.raw_data, sprintf('%sprocessed.m00', lower(participant_id)));
+        m00_file = fullfile(c.paths.raw_data, sprintf('%sprocessed.m00', (participant_id)));
         if ~isfile(m00_file)
             fprintf('[Missing] Cannot find file: %s\n', m00_file);
             continue;
@@ -136,8 +135,8 @@ for v = 1:numel(cfg.variants)
 
         if c.do_cleaning
             EEG = pop_clean_rawdata(EEG, 'FlatlineCriterion',c.clean.flatline, 'ChannelCriterion',c.clean.chan_corr, ...
-                'LineNoiseCriterion',4, 'Highpass','off', 'BurstCriterion',c.clean.asr_cutoff, ...
-                'WindowCriterion',0.25, 'BurstRejection','on', 'Distance','Euclidian');
+                'LineNoiseCriterion','off', 'Highpass','off', 'BurstCriterion',c.clean.asr_cutoff, ...
+                'WindowCriterion','off', 'BurstRejection','off', 'Distance','Euclidian');
             if EEG.nbchan < length(original_chanlocs)
                 EEG = pop_interp(EEG,original_chanlocs,'spherical');
             end
@@ -216,10 +215,10 @@ for v = 1:numel(cfg.variants)
     theta_power_sum = sum(results_T{:, theta_labels}, 2);
     alpha_power_sum = sum(results_T{:, alpha_labels}, 2);
     
-    results_T.ThetaAlphaRatio = theta_power_sum ./ alpha_power_sum;
+    results_T.CL = theta_power_sum ./ alpha_power_sum;
     
     % --- Select final columns & export ---
-    final_cols = {'ParticipantNum','SnippetID_new','ThetaAlphaRatio'};
+    final_cols = {'ParticipantNum','SnippetID_new','CL'};
     results_T  = results_T(:,final_cols);
     results_T  = renamevars(results_T, {'ParticipantNum','SnippetID_new'}, {'Participant','SnippetID'});
     results_T  = sortrows(results_T,{'Participant','SnippetID'});
@@ -229,13 +228,56 @@ for v = 1:numel(cfg.variants)
 
     fprintf('\n[Done] Results for "%s" written to: %s\n\n', c.label, c.paths.output_csv);
 
-    %% ---------------------------------------------------------------------
-    %% (Optional) Execute Python Script
-    %% ---------------------------------------------------------------------
+    % ---------------------------------------------------------------------
+    % (Optional) Execute Python Script
+    % ---------------------------------------------------------------------
     if isfile(c.paths.python_exe) && isfile(c.paths.python_script)
         pyenv('Version',c.paths.python_exe);
         pyrun(fileread(c.paths.python_script));
     end
+
+    % ---------------------------------------------------------------------
+    %  AUTOMATIC CONSOLE SUMMARY  (filters • channels • metrics)
+    % ---------------------------------------------------------------------
+    %% 1) Format active filter parameters into a string
+    fNames = fieldnames(c.filter);
+    fPairs = cell(1, numel(fNames));
+    for ii = 1:numel(fNames)
+        val = c.filter.(fNames{ii});
+        if isnumeric(val)
+            if isempty(val) || any(isnan(val)), valStr = 'off';
+            elseif numel(val) == 1,              valStr = sprintf('%.2f', val);
+            else,                                valStr = sprintf('[%s]', strtrim(sprintf('%.2f ', val)));
+            end
+        elseif ischar(val) || isstring(val)
+            valStr = char(val);
+        else % structs, logicals, etc.
+            valStr = '<obj>';
+        end
+        fPairs{ii} = sprintf('%s=%s', fNames{ii}, valStr);
+    end
+    filterStr = strjoin(fPairs, ', ');
+    
+    %% 2) Get unique channels and metrics from config and results
+    % Union of all channels used in analysis.metrics
+    allChans = {};
+    for m = 1:numel(c.analysis.metrics)
+        % Safely access and unpack channel names from each metric
+        if isstruct(c.analysis.metrics{m}) && isfield(c.analysis.metrics{m}, 'channels')
+            allChans = [allChans, c.analysis.metrics{m}.channels{:}]; %#ok<AGROW>
+        end
+    end
+    chanStr = strjoin(unique(allChans,'stable'), ', ');
+    
+    % Output metric columns from the results table
+    metricCols = setdiff(results_T.Properties.VariableNames, {'Participant','SnippetID'});
+    metricStr  = strjoin(metricCols, ', ');
+    metricLabel = 'Metric';
+    if numel(metricCols) ~= 1, metricLabel = 'Metrics'; end
+    
+    %% 3) Print one-liner summary
+    fprintf('[Summary] Filters: %s  |  Channels: %s  |  %s: %s\n', ...
+            filterStr, chanStr, metricLabel, metricStr);
 end % variant loop
 end % main function
 
