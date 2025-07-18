@@ -9,6 +9,10 @@ def main():
     eeg_df     = pd.read_csv("eeg_full_list.csv")             # columns: Participant, SnippetID, …, CL
     metrics_df = pd.read_csv("survey_cl_full_list.csv") # columns: Participant, SnippetID, …, CL
 
+    # removing the visual task (SnippetID 13) from both dataframes
+    eeg_df = eeg_df[eeg_df["SnippetID"] != 13]
+    metrics_df = metrics_df[metrics_df["SnippetID"] != 13]
+
     # 2 – (Optional) drop Snippet 13 if you kept it in the old analysis
     # eeg_df     = eeg_df[eeg_df["SnippetID"] != 13]
     # metrics_df = metrics_df[metrics_df["SnippetID"] != 13]
