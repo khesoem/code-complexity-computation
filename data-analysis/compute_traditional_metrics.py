@@ -14,4 +14,4 @@ with open('traditional_metrics.csv', 'w') as res:
                     cc = ComplexityVisitor.from_code(src, off=True).complexity
                     m = analyze(src)
                     hv = h_visit(src).total.vocabulary # The Halstead vocabulary is not computed correctly by radon
-                    print(f"{file},{m.sloc},{cc},{hv}\n")
+                    res.write(f"{file},{m.sloc},{cc},{hv}\n")
