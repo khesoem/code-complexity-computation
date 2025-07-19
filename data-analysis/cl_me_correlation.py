@@ -6,8 +6,12 @@ from scipy.stats import pearsonr
 
 def main():
     # 1 – Load the two data sets  ──▶  NOTE: both now have “CL” as the value column
-    eeg_df     = pd.read_csv("eeg.csv")             # columns: Participant, SnippetID, …, CL
-    metrics_df = pd.read_csv("survey_cl.csv") # columns: Participant, SnippetID, …, CL
+    eeg_df     = pd.read_csv("eeg_full_list.csv")             # columns: Participant, SnippetID, …, CL
+    metrics_df = pd.read_csv("survey_cl_full_list.csv") # columns: Participant, SnippetID, …, CL
+
+    # removing the visual task (SnippetID 13) from both dataframes
+    eeg_df = eeg_df[eeg_df["SnippetID"] != 13]
+    metrics_df = metrics_df[metrics_df["SnippetID"] != 13]
 
     # 2 – (Optional) drop Snippet 13 if you kept it in the old analysis
     # eeg_df     = eeg_df[eeg_df["SnippetID"] != 13]
@@ -50,7 +54,6 @@ def main():
     #plt.legend()
     #plt.tight_layout()
     #plt.show()
-
 
 if __name__ == "__main__":
     main()
