@@ -32,7 +32,7 @@ import statsmodels.formula.api as smf
 ###############################################################################
 
 TARGET_PREDICTION: str = "CL"                     # Column to predict
-SURVEY_PATH: Path = Path("eeg.csv")          # CL ratings (Participant, SnippetID, CL)
+SURVEY_PATH: Path = Path("eeg.csv")          # CL ratings (Participant, SnippetID, CL) - change to "survey_cl.csv" if needed
 METRICS_PATH: Path = Path("snippet_metrics.csv") # Complexity metrics table
 MCC_METRICS: tuple[str, ...] = ("MCCPD", "MCCMPI")  # MCC metrics to iterate over
 OLD_SUFFIX: str = ""                               # Legacy suffix for column names, if any
@@ -60,6 +60,7 @@ def compute_correlations(
     survey_path: Path = SURVEY_PATH,
     metrics_path: Path = METRICS_PATH,
     old_suffix: str = OLD_SUFFIX,
+    show_combined: bool = False,
 ) -> None:
     """Fit mixed‑effects models and print two succinct summary lines."""
 
@@ -174,32 +175,33 @@ def compute_correlations(
     ####################################################################
     # PART B – Combined model                                          #
     ####################################################################
-    combined_coef = float("nan")
-    combined_p = float("nan")
-    best_comb_metric: str | None = None
-    try:
-        formula_all = f"{target_prediction} ~ " + " + ".join(f"scale_{m}" for m in metric_names)
-        md_all = smf.mixedlm(
-            formula=formula_all,
-            data=df,
-            groups=df["Participant"],
-            re_formula="~1",
-            vc_formula={"SnippetID": "0 + C(SnippetID)"},
-        )
-        with warnings.catch_warnings():
-            warnings.simplefilter("ignore")
-            mdf_all = md_all.fit(method="lbfgs")
-        params = mdf_all.params
-        pvals = mdf_all.pvalues
-        combined_coef = _safe_get(params, f"scale_{focal_metric}")
-        combined_p = _safe_get(pvals, f"scale_{focal_metric}")
+    if show_combined:
+        combined_coef = float("nan")
+        combined_p = float("nan")
+        best_comb_metric: str | None = None
+        try:
+            formula_all = f"{target_prediction} ~ " + " + ".join(f"scale_{m}" for m in metric_names)
+            md_all = smf.mixedlm(
+                formula=formula_all,
+                data=df,
+                groups=df["Participant"],
+                re_formula="~1",
+                vc_formula={"SnippetID": "0 + C(SnippetID)"},
+            )
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                mdf_all = md_all.fit(method="lbfgs")
+            params = mdf_all.params
+            pvals = mdf_all.pvalues
+            combined_coef = _safe_get(params, f"scale_{focal_metric}")
+            combined_p = _safe_get(pvals, f"scale_{focal_metric}")
 
-        comb_metrics_coefs = {m: _safe_get(params, f"scale_{m}") for m in metric_names}
-        best_comb_metric = max(comb_metrics_coefs, key=comb_metrics_coefs.get)
-    except ValueError:
-        pass
+            comb_metrics_coefs = {m: _safe_get(params, f"scale_{m}") for m in metric_names}
+            best_comb_metric = max(comb_metrics_coefs, key=comb_metrics_coefs.get)
+        except ValueError:
+            pass
 
-    best_comb_flag = best_comb_metric == focal_metric if best_comb_metric else False
+        best_comb_flag = best_comb_metric == focal_metric if best_comb_metric else False
 
     ####################################################################
     # 4. Two‑line report                                               #
@@ -212,13 +214,17 @@ def compute_correlations(
             return f"{base}  (best)"
         return f"{base}  (¬best, top = {best_info})"
 
+    print(f"###### Correlations for {mcc_metric} #######")
+    print(pd.DataFrame(single_results))
     single_best_info = f"{best_single['metric']} {best_single['coef']:.3g}" if not best_single_flag else None
-    combined_best_info = (
-        f"{best_comb_metric} {_safe_get(params, f'scale_{best_comb_metric}'):.3g}" if not best_comb_flag and best_comb_metric else None
-    )
+    print(_fmt_line(f"Is {mcc_metric} best complexity metric? ", focal_single["coef"], focal_single["p"], best_single_flag, single_best_info), end="\n\n")
 
-    print(_fmt_line("SINGLE:", focal_single["coef"], focal_single["p"], best_single_flag, single_best_info))
-    print(_fmt_line("COMBINED:", combined_coef, combined_p, best_comb_flag, combined_best_info))
+    if show_combined:
+        combined_best_info = (
+            f"{best_comb_metric} {_safe_get(params, f'scale_{best_comb_metric}'):.3g}" if not best_comb_flag and best_comb_metric else None
+        )
+
+        print(_fmt_line("COMBINED:", combined_coef, combined_p, best_comb_flag, combined_best_info))
 
 ###############################################################################
 # Script entry point                                                          #
