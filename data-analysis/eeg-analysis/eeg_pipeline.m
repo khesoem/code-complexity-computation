@@ -4,7 +4,7 @@ function eeg_pipeline()
 % • Processes EEG data by calculating spectral power for configured channel
 %   groups and frequency bands.
 % • Computes a single Theta/Alpha power ratio automatically.
-% • Removes snippets specified in cfg.post.bad_snippets.
+% • Removes snippets specified in cfg.post.skipped_snippets.
 % -------------------------------------------------------------------------
 
 %% =========================================================================
@@ -53,7 +53,7 @@ cfg.analysis.metrics = { ...
 };
 
 % --- Post‑processing ------------------------------------------------------
-cfg.post.bad_snippets   = [6 13 15];   % ← your “drop list”
+cfg.post.skipped_snippets   = [6 13 15];   % ← your “drop list”
 
 % --- Variant definitions (can be left empty if not needed) ----------------
 cfg.variants = { ...
@@ -191,9 +191,9 @@ for v = 1:numel(cfg.variants)
     results_T.ParticipantNum = cellfun(@(x) sscanf(x,'P%d'),results_T.Participant);
     results_T.SnippetNum     = cellfun(@(x) sscanf(x,'snippet%d'),results_T.SnippetID);
 
-    bad_sorted = sort(c.post.bad_snippets(:)');
-    results_T(ismember(results_T.SnippetNum,bad_sorted),:) = [];
-    results_T.SnippetID_new = arrayfun(@(x) x - sum(bad_sorted < x), results_T.SnippetNum);
+    skipped_sorted = sort(c.post.skipped_snippets(:)');
+    results_T(ismember(results_T.SnippetNum,skipped_sorted),:) = [];
+    results_T.SnippetID_new = arrayfun(@(x) x - sum(skipped_sorted < x), results_T.SnippetNum);
 
     % --- AUTOMATICALLY calculate Theta / Alpha ratio ---
     theta_labels = {};
