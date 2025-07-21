@@ -1,6 +1,6 @@
 # Replication Package
 
-This repository provides the programs and data necessary to replicate the results of our research paper "*EEG-Based Evaluation of Students’ Code Comprehension: Traditional vs. Cognitive Code Complexity Metrics*".
+This repository provides the programs and data necessary to replicate the results of our research paper "*Cognitive Code Complexity: An EEG Validation Study*".
 
 ## Contents
 The repository includes:
