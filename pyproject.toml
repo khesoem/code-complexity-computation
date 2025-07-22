@@ -3,7 +3,7 @@ name = "complexity-computation"
 version = "0.1.0"
 description = ""
 authors = [
-    {name = "XXXX",email = "XXXX"}
+    {name = "XXXX",email = "xx@xx.com"}
 ]
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
