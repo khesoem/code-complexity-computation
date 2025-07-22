@@ -1,4 +1,4 @@
-pyenv('Version','C:\Users\cemke\AppData\Local\Programs\Python\Python311\python.exe')
+pyenv('Version','paty-to-python/python')
 
 pysrc = fileread("lmm.py");
 pyrun(pysrc)
