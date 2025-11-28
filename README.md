@@ -5,7 +5,7 @@ This repository provides the programs and data necessary to replicate the result
 ## Contents
 The repository includes:
 - **MCC Computation Tool**: The tool we have developed to compute MCC-PD and MCC-MPI for Python programs.
-- **Data Analysis Artifcat**: The data and analysis related to the complexity of code snippets and the participants' cognitive load.
+- **Data Analysis Artifact**: The data and analysis related to the complexity of code snippets and the participants' cognitive load.
 
 ### MCC Computation Tool
 You can run the MCC computation tool using the following command, after installing the required dependencies via poetry:
