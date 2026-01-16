@@ -32,3 +32,6 @@ DepDegree and Halstead Vocabulary are computed manually with the assistance of O
 - **`eeg-analysis/eeg_pipeline.m`**: Contains the entire pipeline for analyzing EEG data and computing final correlations.
 This file is a MATLAB script that requires the [EEGLAB toolbox](https://eeglab.org/tutorials/01_Install/Install.html) to run.
 The script provides a user-friendly interface to run the experiment with various data cleaning and filtering techniques.
+
+## Remark
+The repository contains all materials necessary for replication except the raw EEG data from the participants, owing to privacy concerns because of the biometric identification potential.
